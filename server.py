@@ -2,9 +2,9 @@ from flask import Flask
 from game import *
 from DQN import *
 from utils import *
-from multiprocessing import Process, Value
 import asyncio
 
+from flask.helpers import send_from_directory
 from flask_cors import CORS, cross_origin
 
 # content to be returned
@@ -110,7 +110,8 @@ async def gameIteration():
             board = env.get_board()
 
 loop = asyncio.get_event_loop()
-app = Flask(__name__, static_folder='client/build')
+app = Flask(__name__, static_folder='client/build', static_url_path='/')
+CORS(app)
 
 # restart route
 @app.route("/restart", methods=['GET'])
@@ -135,6 +136,11 @@ def data():
 def rewards():
     content = loop.run_until_complete(getRewards())
     return {"rewards": content}
+
+@app.route('/')
+@cross_origin
+def serve():
+    return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == "__main__":
     app.run(debug=False)
