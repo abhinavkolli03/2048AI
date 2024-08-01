@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Toggle from 'react-toggle'
+import "./App.css"
 
 import Container from './components/Container';
 import ScoreBoard from './components/ScoreBoard';
@@ -10,247 +10,455 @@ import move from './movements/move';
 import { mapKeyCodeToDirection } from './constants/directions';
 import GameDisplay from './constants/GameDisplay';
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 import styled, { ThemeProvider } from 'styled-components';
 
-
 function App() {
-  const [cells, setCells] = useState(initializeGame(4))
-  const [score, setScore] = useState(0)
-  const [bestScore, setBestScore] = useState(0)
-  const [humanBestScore, setHumanBestScore] = useState(0)
-  const [gameOver, setGameOver] = useState(false)
-  const [totalRewards, setTotalRewards] = useState([])
- 
-  const [startAI, setStartAI] = useState(false)
-  const [humanMode, setHumanMode] = useState(false)
-  const [resetAI, setResetAI] = useState(false)
-  const [currentTrial, setCurrentTrial] = useState(1)
-
-  const [createGame, setCreateGame] = useState(false)
-  
-  const [rewardsData, setRewardsData] = useState([{}])
+  const [cells, setCells] = useState(initializeGame(4));
+  const [score, setScore] = useState(0);
+  const [bestScore, setBestScore] = useState(0);
+  const [humanBestScore, setHumanBestScore] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [totalRewards, setTotalRewards] = useState([]);
+  const [startAI, setStartAI] = useState(false);
+  const [humanMode, setHumanMode] = useState(false);
+  const [resetAI, setResetAI] = useState(false);
+  const [currentTrial, setCurrentTrial] = useState(1);
+  const [createGame, setCreateGame] = useState(false);
+  const [rewardsData, setRewardsData] = useState([{}]);
+  const [ddqnMode, setDdqnMode] = useState(false);
 
   const handleKeyPress = (event) => {
     if (humanMode && !startAI && !gameOver && mapKeyCodeToDirection[event.code]) {
-      let data = move(cells, mapKeyCodeToDirection[event.code])
-      setCells([...data['grid']])
-      if(humanMode && score >= humanBestScore) {
-        setHumanBestScore(score + data['score'])
+      let data = move(cells, mapKeyCodeToDirection[event.code]);
+      setCells([...data['grid']]);
+      if (humanMode && score >= humanBestScore) {
+        setHumanBestScore(score + data['score']);
       }
-      setScore(score + data['score'])
-      setGameOver(data['gameOver'])
+      setScore(score + data['score']);
+      setGameOver(data['gameOver']);
     }
-  }
+  };
 
   const switchResetAI = async () => {
-    if(!humanMode) {
-      setResetAI(true)
+    if (!humanMode) {
+      setResetAI(true);
     }
-  }
+  };
 
   const newGame = async () => {
-    setCreateGame(true)
-    setGameOver(false)
+    setCreateGame(true);
+    setGameOver(false);
   };
 
   const startAIGame = async () => {
-    if(!humanMode) {
-      if (startAI) {
-        setStartAI(false)
-      } else {
-        setStartAI(true)
-      }
+    if (!humanMode) {
+      setStartAI(!startAI);
     }
-  }
+  };
 
   useEffect(() => {
-    if(resetAI) {
+    if (resetAI) {
       fetch("/restart").then(
         res => res.json()
       ).then(
         data => {
-          setCells(data['board'])
-          setResetAI(false) 
-          setStartAI(false)
-          setTotalRewards([])
-          setRewardsData([{}])
-          setScore(0)
+          setCells(data['board']);
+          setResetAI(false);
+          setStartAI(false);
+          setTotalRewards([]);
+          setRewardsData([{}]);
+          setScore(0);
         }
-      )
+      );
     }
-    if(createGame && humanMode) {
+    if (createGame && humanMode) {
       fetch("/newgame").then(
         res => res.json()
       ).then(
         data => {
-          setCells(data['board'])
-          setCreateGame(false)
-          setScore(0)
+          setCells(data['board']);
+          setCreateGame(false);
+          setScore(0);
         }
-      )
+      );
     }
-    if(startAI) {
-      fetch("/data").then(
-        res => res.json()
-      ).then(
-        data => {
-          setCells(data['board'])
-          setCurrentTrial(data['trial'])
-          if(data['score'] >= bestScore) {
-            setBestScore(data['score'])
-          }
-          setScore(data['score'])
-          if(data['complete']) {
-            setTotalRewards([...totalRewards, score])
-          }
-        }
-      )
-    }
-  });
+  }, [resetAI, createGame]);
 
   useEffect(() => {
-    if(totalRewards[totalRewards.length - 1] === 0) {
-      totalRewards.pop()
+    let aiInterval;
+    if (startAI) {
+      aiInterval = setInterval(async () => {
+        const response = await fetch("/data");
+        const data = await response.json();
+        setCells(data['board']);
+        setCurrentTrial(data['trial']);
+        if (data['score'] >= bestScore) {
+          setBestScore(data['score']);
+        }
+        setScore(data['score']);
+        if (data['complete']) {
+          setTotalRewards(prevRewards => [...prevRewards, data['reward']]);
+        }
+        if (data['gameOver']) {
+          clearInterval(aiInterval);
+          setStartAI(false);
+        }
+      }, 500); // Adjust the interval time as needed
+    } else {
+      clearInterval(aiInterval);
+    }
+    return () => clearInterval(aiInterval);
+  }, [startAI, bestScore]);
+
+  useEffect(() => {
+    if (totalRewards[totalRewards.length - 1] === 0) {
+      totalRewards.pop();
     }
     else {
-      let sum = totalRewards[totalRewards.length - 1]
-      let episode = currentTrial
-      if(sum && rewardsData[totalRewards.length - 1]['epsiodeCount'] !== episode) {
-        setRewardsData([...rewardsData, {episodeCount: episode, reward: sum}])
+      let sum = totalRewards[totalRewards.length - 1];
+      let episode = currentTrial;
+      if (sum && rewardsData[totalRewards.length - 1]['epsiodeCount'] !== episode) {
+        setRewardsData([...rewardsData, { episodeCount: episode, reward: sum }]);
       }
     }
-  }, [totalRewards])
+  }, [totalRewards]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
     return () => {
-      window.removeEventListener('keydown', handleKeyPress)
-    }
-  })
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  });
 
   const handleToggleHuman = () => {
-    if(!startAI) {
-      if(humanMode) {
-        setHumanMode(false)
-      }
-      else {
-        setHumanMode(true)
-      }
-      setResetAI(true)
+    if (!startAI) {
+      setHumanMode(!humanMode);
+      setResetAI(true);
     }
-  }
+  };
 
-  function activateHumanColorStyle(restart=false) {
-    let backgroundColor = ""
-    if(humanMode) {
-      backgroundColor = "#90EE90"
-    } else if(!restart) {
-      backgroundColor = "#92B7FE"
+  function activateHumanColorStyle(restart = false) {
+    let backgroundColor = "";
+    if (humanMode) {
+      backgroundColor = "#90EE90";
+    } else if (!restart) {
+      backgroundColor = "#92B7FE";
     }
-    return backgroundColor
+    return backgroundColor;
   }
 
   function activateHumanText() {
-    let text = ""
-    if(humanMode) {
-      text = "Human Mode"
+    let text = "";
+    if (humanMode) {
+      text = "Human Mode";
     } else {
-      text = "DQN AI mode"
+      text = "DQN AI mode";
     }
-    return text
+    return text;
   }
 
-  function activateAIColorStyle(reset=false) {
-    let backgroundColor = ""
-    if(!humanMode) {
-      if(reset) {
-        backgroundColor = "#90EE90"
-      } else if(startAI) {
-        backgroundColor = "#FF7F7F"
+  function activateAIColorStyle(reset = false) {
+    let backgroundColor = "";
+    if (!humanMode) {
+      if (reset) {
+        backgroundColor = "#90EE90";
+      } else if (startAI) {
+        backgroundColor = "red";
       } else {
-        backgroundColor = "#90EE90"
+        backgroundColor = "green";
       }
     }
-    return backgroundColor
+    return backgroundColor;
   }
 
   function activateAIText() {
-    let text = ""
-    if(startAI) {
-      text = "Stop"
+    let text = "";
+    if (startAI) {
+      text = "Stop";
     } else {
-      text = "Start"
+      text = "Start";
     }
-    return text
+    return text;
   }
 
+  const HumanSettings = () => {
+    return (
+      <div style={{ marginTop: '-20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+          <BiggerText>Human Settings</BiggerText>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+          <SettingsButton style={{ backgroundColor: activateHumanColorStyle(true) }} onClick={newGame}>
+            <Text>Restart Game</Text>
+          </SettingsButton>
+        </div>
+      </div>
+    );
+  };
 
-  
+  const AISettings = () => {
+    return (
+      <div style={{ marginTop: '-20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+          <BiggerText>DQN AI Settings</BiggerText>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+          <SettingsButton style={{ backgroundColor: activateAIColorStyle(true) }} onClick={switchResetAI}>
+            <Text>Reset AI</Text>
+          </SettingsButton>
+          <SettingsButton style={{ backgroundColor: activateAIColorStyle() }} onClick={startAIGame}>
+            <Text>{activateAIText()}</Text>
+          </SettingsButton>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <ThemeProvider theme={GameDisplay}>
-        <Container>
-          {console.log(totalRewards)}
-          <div style={{flex: 1, padding: '10px', flexDirection: 'column'}}>
-            <ScoreBoard score={score} bestScore={bestScore} humanBest={humanBestScore}/>
-            <div style={{display: 'flex', marginTop: '10px', justifyContent: 'center'}}>
-              <SettingsButton style={{backgroundColor: activateHumanColorStyle()}} onClick={handleToggleHuman}>
-                  <Text>{activateHumanText()}</Text>
-              </SettingsButton>
-            </div>
-            <br />
-            <Game cells={cells} size={4} />
-            <br />
-            <div style={{display: 'flex', justifyContent: 'space-around'}}>
-              <SettingsButton style={{backgroundColor: activateHumanColorStyle(true)}} onClick={newGame}>
-                <Text>Restart Game</Text>
-              </SettingsButton>
-            </div>
-            <br />
-            <div style={{display: 'flex', justifyContent: 'space-around'}}>
-              <BiggerText>DQN AI Settings</BiggerText>
-            </div>
-            <div style={{display: 'flex', justifyContent: 'space-around'}}>
-              <SettingsButton style={{backgroundColor: activateAIColorStyle(true)}} onClick={switchResetAI}>
-                <Text>Reset AI</Text>
-              </SettingsButton>
-              <SettingsButton style={{backgroundColor: activateAIColorStyle()}} onClick={startAIGame}>
-                <Text>{activateAIText()}</Text>
-              </SettingsButton>
-            </div>
-          </div>
-          <div style={{display: 'flex', justifyContent: 'space-around'}}>
+        <MainContainer>
+          <Header>
+            <ScoreBoard score={score} bestScore={bestScore} humanBest={humanBestScore} />
+          </Header>
+          <GameArea>
+            <GameContainer>
+              <Game cells={cells} size={4} />
+            </GameContainer>
+            <ControlsContainer>
+              <ButtonRow>
+                <SettingsButton
+                  style={{ backgroundColor: humanMode ? '#FFD700' : GameDisplay.secondaryColor }}
+                  onClick={() => {
+                    setHumanMode(true);
+                    setStartAI(false);
+                    setResetAI(false);
+                  }}
+                >
+                  <Text>Human Mode</Text>
+                </SettingsButton>
+                <SettingsButton
+                  style={{ backgroundColor: !humanMode ? '#FFD700' : GameDisplay.secondaryColor }}
+                  onClick={() => {
+                    setHumanMode(false);
+                    setStartAI(false);
+                    setResetAI(false);
+                  }}
+                >
+                  <Text>DQN AI Mode</Text>
+                </SettingsButton>
+              </ButtonRow>
+  
+              {humanMode && (
+                <InstructionsContainer>
+                  <InstructionText>Use arrowkeys to join blocks!</InstructionText>
+                  <ArrowKeysImage src={require('./media/arrowkeys.png')} alt="Arrow keys" />
+
+                </InstructionsContainer>
+              )}
+              {!humanMode && (
+                <InstructionsContainer>
+                  <InstructionText>Watch AI learn and play!</InstructionText>
+                </InstructionsContainer>
+              )}
+  
+              {!humanMode && (
+                <InstructionsContainer>
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+                    <InstructionText>Activate DDQN</InstructionText>
+                    <ToggleSwitch>
+                      <input type="checkbox" checked={ddqnMode} onChange={() => setDdqnMode(!ddqnMode)} />
+                      <span className="slider" />
+                    </ToggleSwitch>
+                  </div>
+                  <InstructionText style={{ fontWeight: 'bold' }}>Current Agent: {ddqnMode ? 'DDQN' : 'DQN'}</InstructionText>
+                </InstructionsContainer>
+              )}
+  
+              <BottomButtonRow>
+                {!humanMode && <SettingsButton
+                  style={{ backgroundColor: startAI ? '#FF7F7F' : '#90EE90' }}
+                  onClick={startAIGame}
+                >
+                  <Text>{activateAIText()}</Text>
+                </SettingsButton>}
+                <SettingsButton
+                  style={{ backgroundColor: !humanMode ? activateAIColorStyle(true) : activateHumanColorStyle(true) }}
+                  onClick={!humanMode ? switchResetAI : newGame}
+                >
+                  <Text>{!humanMode ? 'Reset AI' : 'New Game'}</Text>
+                </SettingsButton>
+              </BottomButtonRow>
+            </ControlsContainer>
+          </GameArea>
+          {!humanMode && <RewardsContainer>
             <BiggerText>Rewards Chart</BiggerText>
-          </div>
-          <ResponsiveContainer width="100%" aspect={3}>
-            <LineChart
-              width={450}
-              height={200}
-              data={rewardsData}
-              margin={{
-                top: 5,
-                right: 40,
-                left: -10,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="episodeCount" />
-              <YAxis datakey="reward"/>
-              <Tooltip />
-              <Line type="monotone" dataKey="reward" stroke="#8884d8" />
-            </LineChart>  
-          </ResponsiveContainer>
-        </Container>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart
+                data={rewardsData}
+                margin={{
+                  top: 5,
+                  right: 40,
+                  left: -10,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="episodeCount" />
+                <YAxis dataKey="reward" />
+                <Tooltip />
+                <Line type="monotone" dataKey="reward" stroke="#8884d8" />
+              </LineChart>
+            </ResponsiveContainer>
+          </RewardsContainer>}
+        </MainContainer>
       </ThemeProvider>
     </div>
   )
+  
+  
 }
 
-export default App
+export default App;
 
+const Header = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const MainContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  background-color: ${props => props.theme.color};
+  align-items: center;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+`;
+
+const GameArea = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+`;
+
+const GameContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-right: 20px;
+`;
+
+const ControlsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f5f5dc; /* Light beige color */
+  padding: 20px;
+  border-radius: 10px;
+  height: 400px; /* Fixed height matching the grid */
+  width: 300px; /* Fixed width */
+`;
+
+const ButtonRow = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+
+  & > *:not(:last-child) {
+    margin-right: 10px;
+  }
+`;
+
+const BottomButtonRow = styled.div`
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  & > *:not(:last-child) {
+    margin-right: 10px;
+  }
+`;
+
+const InstructionsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+`;
+
+const InstructionText = styled.div`
+  color: ${props => props.theme.labelColor};
+  font-weight: 300; /* Thin and light font */
+  font-size: 18px;
+  margin-bottom: 10px;
+  max-width: 100%;
+  word-wrap: break-word;
+`;
+
+const ArrowKeysImage = styled.img`
+  width: 150px;
+  height: auto;
+`;
+
+const ToggleSwitch = styled.label`
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+  margin-left: 10px;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: ${props => props.theme.primaryColor};
+    transition: 0.4s;
+    border-radius: 34px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+  }
+
+  input:checked + .slider {
+    background-color: ${props => props.theme.primaryColor};
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(26px);
+  }
+`;
+
+const RewardsContainer = styled.div`
+  width: 100%;
+  margin-top: 20px;
+  height: 420px; /* Same height as the grid and controls container */
+`;
 
 const SettingsButton = styled.button`
   min-width: 100px;
@@ -263,6 +471,7 @@ const SettingsButton = styled.button`
   border: none;
   cursor: pointer;
   border-radius: 5px;
+  margin: 10px 0;
 `;
 
 const Text = styled.div`
@@ -281,201 +490,3 @@ const BiggerText = styled.div`
   padding: 5px;
 `;
 
-
-// class App extends Component {
-//   state = {
-//     cells: initializeGame(4),
-//     score: 0,
-//     bestScore: 0,
-//     size: 4,
-//     selectedTheme: 'light',
-//     gameOver: false,
-//   };
-
-//   componentDidMount() {
-//     document.addEventListener('keydown', this.handleKeyPress);
-//   }
-
-//   componentWillUnmount() {
-//     document.removeEventListener('keydown', this.handleKeyPress);
-//   }
-
-//   newGame = () => {
-//     this.setState(state => ({
-//       ...state,
-//       cells: initializeGame(state.size),
-//       score: 0,
-//       gameOver: false,
-//     }));
-//   };
-
-//   handleKeyPress = event => {
-//     const { gameOver } = this.state;
-//     if (!gameOver && mapKeyCodeToDirection[event.code]) {
-//       const { cells, score, bestScore, gameOver } = move(
-//         this.state.cells,
-//         mapKeyCodeToDirection[event.code],
-//       );
-//       this.setState({
-//         cells,
-//         score,
-//         bestScore,
-//         gameOver,
-//       });
-//     }
-//   };
-
-//   changeTheme = () => {
-//     this.setState(state => ({
-//       ...state,
-//       selectedTheme: state.selectedTheme === 'light' ? 'light' : 'light',
-//     }));
-//   };
-
-//   render() {
-//     const { cells, score, bestScore, size, selectedTheme, gameOver } = this.state;
-//     return (
-//       <ThemeProvider theme={light}>
-//         <Container>
-//           <Wrapper>
-//             <ScoreBoard score={score} bestScore={bestScore} />
-//             <GameSettings
-//               selectedTheme={selectedTheme}
-//               changeTheme={this.changeTheme}
-//               newGame={this.newGame}
-//             />
-//           </Wrapper>
-//           <Wrapper>
-//             {gameOver && <GameOver />}
-//             <Game cells={cells} size={size} />
-//           </Wrapper>
-//         </Container>
-//       </ThemeProvider>
-//     );
-//   }
-// }
-
-// const Wrapper = styled.div`
-//   flex: 1;
-//   padding: 10px;
-//   flex-direction: column;
-// `;
-
-// export default App;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from 'react'
-// import Slot from "./components/Slot"
-// import { Button, Label } from "semantic-ui-react"
-
-
-// function App() {
-//   const [board, setBoard] = useState([
-//     [0, 0, 0, 0],
-//     [0, 0, 0, 0],
-//     [0, 0, 0, 0],
-//     [0, 0, 0, 0]
-//   ])
-//   const [complete, setComplete] = useState(false)
-//   const [start, setStart] = useState(false)
-//   const [restart, setRestart] = useState(false)
-//   const [text, setText] = useState("Ready")
-
-//   useEffect(() => {
-//     if(start) {
-//       setText("Running")
-//       fetch("/data").then(
-//         res => res.json()
-//       ).then(
-//         data => {
-//           setBoard(data['board'])
-//           setComplete(data['complete'])
-//         }
-//       )
-//     }
-//     else if(restart) {
-//       setText("Restarting")
-//     }
-//     else if(!start) {
-//       setText("Ready")
-//     }
-//   })
-
-//   const handleStart = () => {
-//     if(start) {
-//       setStart(false)
-//     } else {
-//       setStart(true)
-//     }
-//   }
-
-//   return (
-//     <div
-//       style={{
-//         background: "#AD9D8F",
-//         width: "max-content",
-//         margin: "auto",
-//         padding: 5,
-//         borderRadius: 5,
-//         marginTop: 10,
-//       }}
-//     >
-//       {board.map((row, index) => {
-//         return (
-//           <div style={{ display: 'flex'}} key={index}>
-//               {row.map((digit, id) => (
-//                 <Slot value={digit} key={id} />
-//               ))}
-//           </div>
-//         )
-//       })}
-//       {console.log('done')}
-//       <Button
-//         onClick={async () => {
-//           setRestart(true)
-//           await fetch("/restart")
-//           setTimeout(() => {
-//             setBoard([
-//               [0, 0, 0, 0],
-//               [0, 0, 0, 0],
-//               [0, 0, 0, 0],
-//               [0, 0, 0, 0]
-//             ])
-//             setRestart(false)
-//           }, 500)
-//         }}>
-//         Restart AI
-//       </Button>
-//       <Button
-//         onClick={handleStart}>
-//         Start/Stop
-//       </Button>
-//       <Label>
-//         {text}
-//       </Label>
-//     </div>
-//   )
-// }
-
-// export default App

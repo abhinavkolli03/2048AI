@@ -21,7 +21,7 @@ Cell.propTypes = {
       cellStyle = {
         gridColumn: `${x}/${x + 1}`,
         gridRow: `${y}/${y + 1}`,
-        fontSize: fontSizeCalculater(value),
+        fontSize: fontSizeCalculater(value) - 10,
       };
     }
   

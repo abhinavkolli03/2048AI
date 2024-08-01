@@ -47,8 +47,8 @@ function Game({ cells, size }) {
 const Wrapper = styled.div`
   border-radius: 5px;
   background-color: ${props => props.theme.primaryColor};
-  height: 380px;
-  width: 380px;
+  height: 400px;
+  width: 400px;
   padding: 10px;
 `;
 
