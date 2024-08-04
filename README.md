@@ -1,13 +1,5 @@
 # Gamai 2048 Project
 
-## Screenshots
-
-### Human Mode
-![Human Mode](./media/humanmode.png)
-
-### AI Mode (DQN/DDQN)
-![AI Mode](./media/aimode.gif)
-
 ## Overview
 
 This project is an implementation of the 2048 game, featuring both human and AI modes. The AI modes include Deep Q-Network (DQN) and Double Deep Q-Network (DDQN) algorithms for training and playing the game. Users can switch between human mode and AI modes to either play the game manually or let the AI learn and play the game.
@@ -17,6 +9,14 @@ This project is an implementation of the 2048 game, featuring both human and AI 
 - **Human Mode**: Play the 2048 game manually using keyboard inputs.
 - **AI Mode**: Let the AI play the game using either DQN or DDQN algorithms.
 - **Rewards Chart**: Visualize the AI's performance over time with a rewards chart.
+
+## Demos
+
+### Human Mode
+![Human Mode](./media/humanmode.png)
+
+### AI Mode (DQN/DDQN)
+![AI Mode](./media/aimode.gif)
 
 ## Installation
 
