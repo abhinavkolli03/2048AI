@@ -139,6 +139,13 @@ function App() {
     }
   };
 
+  const handleToggleDDQN = () => {
+    const newMode = !ddqnMode;
+    setDdqnMode(newMode);
+    switchAgent(newMode ? 'ddqn' : 'dqn');
+  };
+  
+
   function activateHumanColorStyle(restart = false) {
     let backgroundColor = "";
     if (humanMode) {
@@ -197,6 +204,28 @@ function App() {
       </div>
     );
   };
+
+  const switchAgent = async (agent) => {
+    await fetch('/set_agent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ agent }),
+    });
+  
+    await fetch('/restart');
+    const response = await fetch('/data');
+    const data = await response.json();
+    setCells(data['board']);
+    setCurrentTrial(data['trial']);
+    setScore(data['score']);
+    setGameOver(data['gameOver']);
+    setStartAI(false);
+    setTotalRewards([]);
+    setRewardsData([{}]);
+  };
+  
 
   const AISettings = () => {
     return (
@@ -269,7 +298,7 @@ function App() {
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
                     <InstructionText>Activate DDQN</InstructionText>
                     <ToggleSwitch>
-                      <input type="checkbox" checked={ddqnMode} onChange={() => setDdqnMode(!ddqnMode)} />
+                      <input type="checkbox" checked={ddqnMode} onChange={handleToggleDDQN} />
                       <span className="slider" />
                     </ToggleSwitch>
                   </div>

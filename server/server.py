@@ -3,6 +3,7 @@ from game import Game
 from DQN import DQN
 from DDQN import DDQN
 from utils import process_log, get_grids_next_step
+import threading
 import asyncio
 
 from flask.helpers import send_from_directory
@@ -28,11 +29,14 @@ current_trial = 0
 prev_trial = 0
 step = 0
 
-# Async functions to handle game logic
-async def getRewards():
+# Threading variables
+game_thread = None
+game_thread_lock = threading.Lock()
+
+def getRewards():
     return current_agent.reward_chart
 
-async def reset():
+def reset():
     global env, current_trial, prev_trial, step, current_score, board
     env = Game()
     board = env.restart()
@@ -42,7 +46,7 @@ async def reset():
     current_score = 0
     return board
 
-async def resetGame():
+def resetGame():
     global env, current_trial, prev_trial, step, current_score, board
     board = env.restart()
     current_trial = 0
@@ -51,7 +55,7 @@ async def resetGame():
     current_score = 0
     return board
 
-async def gameIteration():
+def gameIteration():
     global current_trial, prev_trial, step, board, complete, current_score, current_reward
     cur_state = env.get_board().reshape(4, 4)
     trial_len = 500
@@ -100,7 +104,6 @@ async def gameIteration():
             board = env.get_board()
 
 # Flask routes
-loop = asyncio.get_event_loop()
 
 @app.route("/set_agent", methods=['POST'])
 def set_agent():
@@ -110,26 +113,32 @@ def set_agent():
         current_agent = ddqn_agent
     else:
         current_agent = dqn_agent
+    # resetting game for new agent
+    reset()
     return jsonify({"status": "success", "agent": agent_type})
 
 @app.route("/restart", methods=['GET'])
 def restart():
-    board = loop.run_until_complete(reset())
+    board = reset()
     return {"board": board.tolist()}
 
 @app.route("/newgame", methods=['GET'])
 def newgame():
-    board = loop.run_until_complete(resetGame())
+    board = resetGame()
     return {"board": board.tolist()}
 
 @app.route("/data", methods=['GET'])
 def data():
-    loop.run_until_complete(gameIteration())
+    global game_thread, game_thread_lock
+    with game_thread_lock:
+        if game_thread is None or not game_thread.is_alive():
+            game_thread = threading.Thread(target=gameIteration)
+            game_thread.start()
     return {"board": board.tolist(), "complete": complete, "score": current_score, "reward": current_reward, "trial": current_trial}
 
 @app.route("/rewards", methods=["GET"])
 def rewards():
-    content = loop.run_until_complete(getRewards())
+    content = getRewards()
     return {"rewards": content}
 
 @app.route('/')

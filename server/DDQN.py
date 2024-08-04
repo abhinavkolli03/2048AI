@@ -36,6 +36,10 @@ class DDQN:
         model.add(Dense(units=4, activation="linear"))
         model.compile(loss="mean_squared_error", optimizer=Adam(lr=self.learning_rate))
         return model
+    
+    def save_reward(self):
+        self.reward_chart.append(self.current_reward)
+        self.current_reward = 0
 
     def act(self, state):
         self.epsilon *= self.epsilon_decay
